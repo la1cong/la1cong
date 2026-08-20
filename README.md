@@ -1,4 +1,4 @@
-# CountMoney 自动记账（M1）
+# CountMoney 自动记账（S1）
 
 > 纯 Android 离线自动记账：通过监听微信 / 支付宝 / 云闪付 / 银行等 App 的通知栏自动识别交易，AI 核对后入库；支持 843 条 Excel 历史账单全量导入、手动记账、报表统计。数据全部本地存储，无网络权限，无需 Root。
 
@@ -14,15 +14,15 @@ set GRADLE_USER_HOME=%USERPROFILE%\Deepseek\.gradle-home   # 可选：把 Gradle
 gradlew.bat :app:assembleDebug
 # 产物：app\build\outputs\apk\debug\app-debug.apk
 
-gradlew.bat :app:testDebugUnitTest     # 14 个单元测试（通知解析 + Excel 全量解析）
+gradlew.bat :app:testDebugUnitTest     # 17 个单元测试（通知解析 + Excel 全量解析 + 分时段统计）
 ```
 
 ## 功能（5 个 Tab）
 
 | Tab | 功能 |
 |---|---|
-| 首页 | 账单列表、金额统计、卡片、**AI 核对弹窗**（「昨日 N 笔待核对」→ 很准确点赞 / 有漏记去补充） |
-| 报表 | 日 / 月 / 年统计（MPAndroidChart） |
+| 首页 | 账单列表、金额统计、卡片、**局部统计**（今日/本周/本月/本年分时段账单）、**AI 核对弹窗**（「昨日 N 笔待核对」→ 很准确点赞 / 有漏记去补充） |
+| 报表 | 总金额（支出/收入/净结余）、**分时段统计**（每日/每周/每月/每年）、支出均值、排行（总/支出/收入）、时间范围选择 |
 | 记一笔 | 手动记账：金额键盘 + 收支切换 + 17 个一级分类宫格 + 再记一笔 |
 | 发现 | Excel / CSV 导入（自动识别表头，去重入库） |
 | 设置 | 权限引导、数据管理 |
@@ -53,7 +53,7 @@ gradlew.bat :app:testDebugUnitTest     # 14 个单元测试（通知解析 + Exc
 ## 已知限制（微信）
 
 - **微信走通知栏通道**：微信支付/收款**通知**可自动捕获；**聊天内转账**（不产生通知栏通知的场景）无法自动识别，依赖每日 AI 核对弹窗 + 手动补录。
-- 微信 Hook 方案（如 AutoAccounting，Xposed/LSPosed）可捕获聊天内转账，但绑定微信具体版本（8.0.43），微信升级即失效（Tinker 热更新也会破坏 Hook），且需 Root，故 M1 不采用。
+- 微信 Hook 方案（如 AutoAccounting，Xposed/LSPosed）可捕获聊天内转账，但绑定微信具体版本（8.0.43），微信升级即失效（Tinker 热更新也会破坏 Hook），且需 Root，故 S1 不采用。
 
 ## Excel 导入格式
 
@@ -67,10 +67,10 @@ gradlew.bat :app:testDebugUnitTest     # 14 个单元测试（通知解析 + Exc
 - 0 元记录同样导入（真实文件含 29 条）；「合计/总计」行自动跳过。
 - 微信/支付宝官方导出（交易时间/交易对方/金额(元)/收/支）也支持。
 
-## 验收结果（M1）
+## 验收结果（S1）
 
 - [x] `assembleDebug` 构建通过，APK 约 19 MB，可安装（minSdk 26 / Android 8.0+，目标 SDK 36）
-- [x] 单元测试 14 个全绿：`NotificationParserTest`（微信/支付宝/红包/银行/非交易/去重哈希）+ `XLSXParserTest`（**真实 843 条账单全量解析：支出 797 + 收入 46，去重哈希零碰撞**）
+- [x] 单元测试 17 个全绿：`NotificationParserTest`（微信/支付宝/红包/银行/非交易/去重哈希）+ `XLSXParserTest`（**真实 843 条账单全量解析：支出 797 + 收入 46，去重哈希零碰撞**）+ `PeriodStatsTest`（分时段统计）
 - [x] 通知 1 分钟内捕获 → 待核对卡片（pending → AI 弹窗）
 - [x] Excel 843 行导入：解析 843 行、哈希零碰撞 → 入库 843 条、重复 0
 - [x] 5 Tab UI + 主色 #4A7DFF（设计稿对齐）
@@ -87,7 +87,7 @@ app/src/main/java/com/friday/wimm/
 ├── service/       # NotificationListenerService（30 App 白名单）、AccessibilityService、BootReceiver
 ├── ui/            # Compose UI：home（首页+AI核对弹窗）/ stats / add（记一笔）/ import_screen / settings / navigation
 ├── util/          # 纯 Kotlin 解析器：XLSXParser（用户格式+自动识别）、CSVParser、NotificationParser、HashUtil
-└── app 源码按 data/service/ui/parser 分层（M3 预留 ocr 模块位）
+└── app 源码按 data/service/ui/parser 分层（S3 预留 ocr 模块位）
 ```
 
 ## License
