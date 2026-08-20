@@ -77,9 +77,9 @@ fun SplashScreen(onFinish: () -> Unit) {
             .background(SplashBg),
         contentAlignment = Alignment.Center
     ) {
-        // Logo 居中偏上
+        // Logo 居中偏上（使用软件图标前景图，与桌面图标同款样式）
         Image(
-            painter = painterResource(id = R.drawable.start_wally),
+            painter = painterResource(id = R.mipmap.ic_launcher_foreground),
             contentDescription = "Logo",
             modifier = Modifier
                 .size(180.dp)
