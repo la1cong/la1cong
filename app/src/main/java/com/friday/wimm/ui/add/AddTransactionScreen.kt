@@ -43,10 +43,10 @@ val DEFAULT_CATEGORIES = listOf(
     "旅行", "美容", "还款", "医疗"
 )
 
-/** 记一笔（中央大加号 Tab）：金额键盘 + 收支切换 + 宫格分类 + 备注 + 再记一笔 */
+/** 记一笔（中央大加号 Tab）：金额键盘 + 收支切换 + 宫格分类 + 备注，保存后跳转主页 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun AddTransactionScreen(onSubPageChanged: (Boolean) -> Unit = {}) {
+fun AddTransactionScreen(onSubPageChanged: (Boolean) -> Unit = {}, onSaved: () -> Unit = {}) {
     LaunchedEffect(Unit) { onSubPageChanged(false) }
 
     val context = LocalContext.current
@@ -58,12 +58,11 @@ fun AddTransactionScreen(onSubPageChanged: (Boolean) -> Unit = {}) {
     var selectedCategory by remember { mutableStateOf("餐饮") }
     var merchant by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
-    var savedTip by remember { mutableStateOf("") }
 
-    fun saveAndClear(clear: Boolean) {
+    fun save() {
         val amount = amountText.toDoubleOrNull()
         if (amount == null || amount <= 0) {
-            savedTip = "请输入有效金额"
+            android.widget.Toast.makeText(context, "记账失败：金额必须大于 0", android.widget.Toast.LENGTH_SHORT).show()
             return
         }
         scope.launch {
@@ -86,14 +85,10 @@ fun AddTransactionScreen(onSubPageChanged: (Boolean) -> Unit = {}) {
                 )
             }
             if (id > 0) {
-                savedTip = if (clear) "已保存，可继续记账" else "已保存"
-                if (clear) {
-                    amountText = ""
-                    merchant = ""
-                    note = ""
-                }
+                android.widget.Toast.makeText(context, "记账成功", android.widget.Toast.LENGTH_SHORT).show()
+                onSaved() // 跳转主页
             } else {
-                savedTip = "保存失败（可能重复）"
+                android.widget.Toast.makeText(context, "记账失败（可能重复）", android.widget.Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -164,18 +159,9 @@ fun AddTransactionScreen(onSubPageChanged: (Boolean) -> Unit = {}) {
             label = { Text("备注") }
         )
 
-        // 保存 + 再记一笔
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(onClick = { saveAndClear(false) }, modifier = Modifier.weight(1f)) {
-                Text("保存")
-            }
-            OutlinedButton(onClick = { saveAndClear(true) }, modifier = Modifier.weight(1f)) {
-                Text("再记一笔")
-            }
-        }
-
-        if (savedTip.isNotEmpty()) {
-            Text(savedTip, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+        // 保存（成功后跳转主页）
+        Button(onClick = { save() }, modifier = Modifier.fillMaxWidth()) {
+            Text("保存")
         }
     }
 }

@@ -3,6 +3,7 @@ package com.friday.wimm.ui.stats
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -19,18 +20,24 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Tab
@@ -48,6 +55,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -58,9 +67,13 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.friday.wimm.MyApplication
 import com.friday.wimm.data.database.MerchantTotal
+import com.friday.wimm.data.model.Transaction
 import com.friday.wimm.util.PeriodStats
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -114,6 +127,15 @@ fun StatsScreen(isActive: Boolean = true) {
 
     // 日期选择器状态
     var showDatePicker by remember { mutableStateOf(false) }
+
+    // 卡片编辑/删除状态
+    var editingMerchant by remember { mutableStateOf<Pair<String, String>?>(null) } // (商户, 类型)
+    var editMerchantName by remember { mutableStateOf("") }
+    var editMerchantAmount by remember { mutableStateOf("") }
+    var viewingMerchant by remember { mutableStateOf<Pair<String, List<Transaction>>?>(null) }
+    var deletingMerchant by remember { mutableStateOf<String?>(null) }
+    var editingSingleTx by remember { mutableStateOf<Transaction?>(null) }
+    var editSingleTxAmount by remember { mutableStateOf("") }
 
     // 动画状态
     var cardVisible by remember { mutableStateOf(false) }
@@ -607,7 +629,16 @@ fun StatsScreen(isActive: Boolean = true) {
                             AnimatedStatsItem(
                                 merchantTotal = merchantTotal,
                                 index = index,
-                                visible = listVisible
+                                visible = listVisible,
+                                onEdit = {
+                                    editingMerchant = Pair(merchantTotal.merchant, merchantTotal.type)
+                                    editMerchantName = merchantTotal.merchant
+                                    editMerchantAmount = ""
+                                },
+                                onDetails = {
+                                    viewingMerchant = merchantTotal.merchant to filteredTransactions.filter { it.merchant == merchantTotal.merchant }
+                                },
+                                onDelete = { deletingMerchant = merchantTotal.merchant }
                             )
                         }
                     }
@@ -631,6 +662,164 @@ fun StatsScreen(isActive: Boolean = true) {
             onConfirm = { startTime, endTime ->
                 viewModel.setTimeRange(startTime, endTime)
                 showDatePicker = false
+            }
+        )
+    }
+
+    // 编辑商户对话框（重命名 + 按收支类型改金额）
+    editingMerchant?.let { (merchant, type) ->
+        AlertDialog(
+            onDismissRequest = { editingMerchant = null },
+            title = { Text("编辑记账") },
+            text = {
+                Column {
+                    Text("类型：${if (type == "income") "收入" else "支出"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = editMerchantName,
+                        onValueChange = { editMerchantName = it },
+                        label = { Text("商户名称") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = editMerchantAmount,
+                        onValueChange = { editMerchantAmount = it },
+                        label = { Text("修改金额（留空不修改）") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val name = editMerchantName.trim()
+                    val amount = editMerchantAmount.trim().toDoubleOrNull()
+                    editingMerchant = null
+                    viewModel.editMerchant(merchant, name, amount, type)
+                }) { Text("保存") }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingMerchant = null }) { Text("取消") }
+            }
+        )
+    }
+
+    // 查看详情对话框（单笔可改金额/删除）
+    viewingMerchant?.let { (merchant, txs) ->
+        AlertDialog(
+            onDismissRequest = { viewingMerchant = null },
+            title = { Text(merchant) },
+            text = {
+                Column {
+                    Text("共 ${txs.size} 笔（点击单笔可修改金额）", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    val df = remember { SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()) }
+                    txs.take(20).forEach { tx ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .combinedClickable(
+                                    onClick = {
+                                        editingSingleTx = tx
+                                        editSingleTxAmount = if (tx.amount > 0) tx.amount.toString() else ""
+                                    },
+                                    onLongClick = {
+                                        editingSingleTx = tx
+                                        editSingleTxAmount = ""
+                                    }
+                                )
+                                .padding(vertical = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(df.format(Date(tx.timestamp)), style = MaterialTheme.typography.bodySmall)
+                                Text(if (tx.type == "income") "收入" else "支出", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    "¥${String.format("%.2f", tx.amount)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (tx.type == "income") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                                )
+                                Icon(Icons.Default.Edit, contentDescription = "编辑", modifier = Modifier.size(16.dp).padding(start = 4.dp), tint = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                    }
+                    if (txs.size > 20) {
+                        Text("...还有 ${txs.size - 20} 笔", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewingMerchant = null }) { Text("关闭") }
+            }
+        )
+    }
+
+    // 单笔金额编辑对话框
+    editingSingleTx?.let { tx ->
+        AlertDialog(
+            onDismissRequest = { editingSingleTx = null },
+            title = { Text("修改金额") },
+            text = {
+                Column {
+                    Text("${tx.merchant} - ${if (tx.type == "income") "收入" else "支出"}", style = MaterialTheme.typography.bodyMedium)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = editSingleTxAmount,
+                        onValueChange = { editSingleTxAmount = it },
+                        label = { Text("金额") },
+                        prefix = { Text("¥") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val amount = editSingleTxAmount.toDoubleOrNull()
+                    if (amount != null && amount > 0) {
+                        val merchant = tx.merchant
+                        editingSingleTx = null
+                        viewModel.updateTransactionAmount(tx.id, amount)
+                        // 刷新详情列表
+                        viewingMerchant = merchant to filteredTransactions.map { if (it.id == tx.id) it.copy(amount = amount) else it }
+                    }
+                }) { Text("保存") }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = {
+                        val merchant = tx.merchant
+                        editingSingleTx = null
+                        viewModel.deleteTransaction(tx.id)
+                        val updated = filteredTransactions.filter { it.id != tx.id }
+                        viewingMerchant = if (updated.isEmpty()) null else merchant to updated
+                    }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+                    TextButton(onClick = { editingSingleTx = null }) { Text("取消") }
+                }
+            }
+        )
+    }
+
+    // 删除商户所有记录确认
+    deletingMerchant?.let { merchant ->
+        AlertDialog(
+            onDismissRequest = { deletingMerchant = null },
+            title = { Text("删除记录") },
+            text = { Text("确定删除「$merchant」的所有交易记录吗？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    deletingMerchant = null
+                    viewModel.deleteMerchant(merchant)
+                }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { deletingMerchant = null }) { Text("取消") }
             }
         )
     }
@@ -857,11 +1046,15 @@ fun DateRangePickerDialog(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AnimatedStatsItem(
     merchantTotal: MerchantTotal,
     index: Int,
-    visible: Boolean
+    visible: Boolean,
+    onEdit: () -> Unit = {},
+    onDetails: () -> Unit = {},
+    onDelete: () -> Unit = {}
 ) {
     val shouldAnimate = index < 8
     var itemVisible by remember { mutableStateOf(!shouldAnimate) }
@@ -892,16 +1085,36 @@ fun AnimatedStatsItem(
             .offset(y = itemOffsetY.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        MerchantTotalItem(merchantTotal)
+        MerchantTotalItem(
+            merchantTotal = merchantTotal,
+            onEdit = onEdit,
+            onDetails = onDetails,
+            onDelete = onDelete
+        )
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun MerchantTotalItem(merchantTotal: MerchantTotal) {
+fun MerchantTotalItem(
+    merchantTotal: MerchantTotal,
+    onEdit: () -> Unit = {},
+    onDetails: () -> Unit = {},
+    onDelete: () -> Unit = {}
+) {
     val isIncome = merchantTotal.type == "income"
+    val haptic = LocalHapticFeedback.current
+    var showSheet by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .combinedClickable(
+                onClick = { onDetails() },
+                onLongClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    showSheet = true
+                }
+            )
             .padding(16.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -926,5 +1139,40 @@ fun MerchantTotalItem(merchantTotal: MerchantTotal) {
             fontWeight = FontWeight.Bold,
             color = if (isIncome) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error
         )
+    }
+
+    if (showSheet) {
+        ModalBottomSheet(onDismissRequest = { showSheet = false }) {
+            Column(modifier = Modifier.padding(bottom = 24.dp)) {
+                Text(
+                    merchantTotal.merchant,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+                )
+                HorizontalDivider()
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                    label = { Text("编辑（重命名/改金额）") },
+                    selected = false,
+                    onClick = { showSheet = false; onEdit() },
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Default.List, contentDescription = null) },
+                    label = { Text("查看详情") },
+                    selected = false,
+                    onClick = { showSheet = false; onDetails() },
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                    label = { Text("删除所有记录", color = MaterialTheme.colorScheme.error) },
+                    selected = false,
+                    onClick = { showSheet = false; onDelete() },
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+            }
+        }
     }
 }

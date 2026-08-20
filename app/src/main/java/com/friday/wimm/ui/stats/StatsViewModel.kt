@@ -176,6 +176,45 @@ class StatsViewModel(
         }
     }
 
+    /** 编辑商户：重命名（可选）+ 按收支类型改金额 */
+    fun editMerchant(oldName: String, newName: String, amount: Double?, type: String) {
+        viewModelScope.launch {
+            if (newName.isNotBlank() && newName != oldName) {
+                transactionRepository.updateMerchantName(oldName, newName)
+            }
+            if (amount != null && amount > 0) {
+                val target = if (newName.isNotBlank() && newName != oldName) newName else oldName
+                transactionRepository.updateMerchantAmount(target, amount, type)
+            }
+            val allTransactions = transactionRepository.getAllTransactions()
+            _allTransactions.value = allTransactions
+            applyTimeFilter()
+            _toastMessage.value = "已更新"
+        }
+    }
+
+    /** 删除商户的所有交易 */
+    fun deleteMerchant(merchant: String) {
+        viewModelScope.launch {
+            transactionRepository.deleteByMerchant(merchant)
+            val allTransactions = transactionRepository.getAllTransactions()
+            _allTransactions.value = allTransactions
+            applyTimeFilter()
+            _toastMessage.value = "已删除"
+        }
+    }
+
+    /** 删除单笔交易 */
+    fun deleteTransaction(id: Long) {
+        viewModelScope.launch {
+            transactionRepository.deleteTransaction(id)
+            val allTransactions = transactionRepository.getAllTransactions()
+            _allTransactions.value = allTransactions
+            applyTimeFilter()
+            _toastMessage.value = "已删除"
+        }
+    }
+
     fun getPendingTransactions(): List<Transaction> {
         return _allTransactions.value.filter { it.amount <= 0 }
     }

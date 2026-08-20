@@ -2,7 +2,7 @@
 
 > 纯 Android 离线自动记账：通过监听微信 / 支付宝 / 云闪付 / 银行等 App 的通知栏自动识别交易，AI 核对后入库；支持 843 条 Excel 历史账单全量导入、手动记账、报表统计。数据全部本地存储，无网络权限，无需 Root。
 
-项目地址：<https://github.com/la1cong/la1cong>　
+项目地址：<https://github.com/la1cong/la1cong>　|　基于 [WhereIsMyMoney](https://github.com/FridayKoi/WhereIsMyMoney)（Apache-2.0）fork 改造。
 
 ## 快速开始
 
@@ -91,5 +91,5 @@ app/src/main/java/com/friday/wimm/
 ```
 
 ## License
-la1cong
 
+Apache-2.0（继承自 WhereIsMyMoney）。

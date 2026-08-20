@@ -75,6 +75,21 @@ class TransactionRepository(private val dbHelper: DatabaseHelper) {
         dbHelper.getTransactionsByMerchant(merchant)
     }
 
+    /** 按商户重命名（该商户所有交易一并改名） */
+    suspend fun updateMerchantName(oldName: String, newName: String) = withContext(Dispatchers.IO) {
+        dbHelper.updateMerchantName(oldName, newName)
+    }
+
+    /** 按商户+收支类型批量改金额 */
+    suspend fun updateMerchantAmount(merchant: String, amount: Double, type: String) = withContext(Dispatchers.IO) {
+        dbHelper.updateMerchantAmount(merchant, amount, type)
+    }
+
+    /** 按商户删除该商户所有交易 */
+    suspend fun deleteByMerchant(merchant: String) = withContext(Dispatchers.IO) {
+        dbHelper.deleteByMerchant(merchant)
+    }
+
     // 导入记录管理
     suspend fun addImportRecord(fileName: String, startTime: Long, endTime: Long, count: Int): Long =
         withContext(Dispatchers.IO) {

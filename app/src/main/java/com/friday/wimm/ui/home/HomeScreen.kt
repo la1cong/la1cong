@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -119,9 +120,10 @@ fun HomeScreen(onAddMissing: () -> Unit = {}, isActive: Boolean = true) {
     // 动画状态 - 页面整体渐显
     var pageVisible by remember { mutableStateOf(false) }
     var initialized by remember { mutableStateOf(false) }
+    var refreshKey by remember { mutableStateOf(0) }
 
-    // 加载/刷新数据：首次进入 + 每次切回本页时重新加载（保证导入文件后首页同步）
-    LaunchedEffect(isActive) {
+    // 加载/刷新数据：首次进入 + 每次切回本页时重新加载（保证导入文件后首页同步）+ 手动刷新
+    LaunchedEffect(isActive, refreshKey) {
         if (isActive) {
             kotlinx.coroutines.withContext(Dispatchers.IO) {
                 cards = cardRepository.getAllCards()
@@ -156,6 +158,7 @@ fun HomeScreen(onAddMissing: () -> Unit = {}, isActive: Boolean = true) {
         }
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     AnimatedVisibility(
         visible = pageVisible,
         enter = fadeIn(tween(350, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)))
@@ -381,6 +384,20 @@ fun HomeScreen(onAddMissing: () -> Unit = {}, isActive: Boolean = true) {
             item { Spacer(modifier = Modifier.height(16.dp)) }
         }
     }
+    }
+        // 右下角刷新按钮
+        if (!isLoading) {
+            FloatingActionButton(
+                onClick = { refreshKey++ },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp),
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            ) {
+                Icon(Icons.Default.Refresh, contentDescription = "刷新")
+            }
+        }
     }
 
     // 卡片选择对话框
@@ -708,6 +725,14 @@ private fun RecentTransactionItem(
                 }
                 if (summary.incomeTotal > 0) {
                     Text("+¥${String.format("%.2f", summary.incomeTotal)}", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onEdit, modifier = Modifier.size(28.dp)) {
+                    Icon(Icons.Default.Edit, contentDescription = "编辑", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                }
+                IconButton(onClick = onDelete, modifier = Modifier.size(28.dp)) {
+                    Icon(Icons.Default.Delete, contentDescription = "删除", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
                 }
             }
         }

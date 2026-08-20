@@ -398,6 +398,26 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME
         }
     }
 
+    /** 按商户重命名（该商户的所有交易一并改名） */
+    fun updateMerchantName(oldName: String, newName: String) {
+        val values = ContentValues().apply { put("merchant", newName) }
+        writableDatabase.update("transactions", values, "merchant = ?", arrayOf(oldName))
+    }
+
+    /** 按商户+收支类型批量改金额 */
+    fun updateMerchantAmount(merchant: String, amount: Double, type: String) {
+        val values = ContentValues().apply { put("amount", amount) }
+        writableDatabase.update(
+            "transactions", values,
+            "merchant = ? AND type = ?", arrayOf(merchant, type)
+        )
+    }
+
+    /** 按商户删除该商户的所有交易 */
+    fun deleteByMerchant(merchant: String) {
+        writableDatabase.delete("transactions", "merchant = ?", arrayOf(merchant))
+    }
+
     fun getTransactionsByMerchant(merchant: String): List<Transaction> {
         val transactions = mutableListOf<Transaction>()
         val db = readableDatabase

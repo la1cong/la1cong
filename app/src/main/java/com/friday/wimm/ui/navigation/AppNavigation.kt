@@ -176,10 +176,15 @@ private fun MainContent() {
                         1 -> StatsScreen(
                             isActive = pagerState.currentPage == 1
                         )
-                        2 -> AddTransactionScreen(onSubPageChanged = { isSub ->
-                            showNavBar = !isSub
-                            anySubPageActive = isSub
-                        })
+                        2 -> AddTransactionScreen(
+                            onSubPageChanged = { isSub ->
+                                showNavBar = !isSub
+                                anySubPageActive = isSub
+                            },
+                            onSaved = {
+                                coroutineScope.launch { pagerState.scrollToPage(0) }
+                            }
+                        )
                         3 -> ImportScreen(onSubPageChanged = { isSub ->
                             showNavBar = !isSub
                             anySubPageActive = isSub
