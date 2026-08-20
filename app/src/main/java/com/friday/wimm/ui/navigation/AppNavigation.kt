@@ -20,11 +20,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.activity.compose.BackHandler
 import com.friday.wimm.ui.home.HomeScreen
 import com.friday.wimm.ui.add.AddTransactionScreen
-import com.friday.wimm.ui.cards.CardsScreen
 import com.friday.wimm.ui.cards.CreateCardScreen
 import com.friday.wimm.ui.cards.CardDetailScreen
-import com.friday.wimm.ui.cards.CategoryManageScreen
 import com.friday.wimm.ui.import_screen.ImportScreen
+import com.friday.wimm.ui.stats.StatsScreen
 import com.friday.wimm.ui.settings.SettingsScreen
 import com.friday.wimm.ui.permissions.PermissionsScreen
 import com.friday.wimm.MyApplication
@@ -65,10 +64,16 @@ private fun createDefaultGlobalCard(context: android.content.Context) {
     val application = context.applicationContext as MyApplication
     val cardRepository = CardRepository(application.databaseHelper)
     val cards = cardRepository.getAllCards()
-    if (cards.isEmpty()) {
+    val existing = cards.firstOrNull { it.isGlobal }
+    if (existing != null) {
+        // 全局卡片覆盖所有时间：起始时间归零，确保导入的历史账单全部计入首页统计
+        if (existing.startTime != 0L) {
+            cardRepository.updateCard(existing.copy(startTime = 0L))
+        }
+    } else {
         val globalCard = Card(
             name = "全局统计",
-            startTime = System.currentTimeMillis(),
+            startTime = 0L,
             endTime = 0,
             isGlobal = true
         )
@@ -168,22 +173,8 @@ private fun MainContent() {
                                 coroutineScope.launch { pagerState.animateScrollToPage(2) }
                             }
                         )
-                        1 -> CardsScreen(
-                            onCardClick = { card ->
-                                selectedCard = card
-                                currentSubPage = "card_detail"
-                                showNavBar = false
-                                anySubPageActive = true
-                            },
-                            onCreateCard = {
-                                currentSubPage = "create_card"
-                                showNavBar = false
-                                anySubPageActive = true
-                            },
-                            onSubPageChanged = { isSub ->
-                                showNavBar = !isSub
-                                anySubPageActive = isSub
-                            }
+                        1 -> StatsScreen(
+                            isActive = pagerState.currentPage == 1
                         )
                         2 -> AddTransactionScreen(onSubPageChanged = { isSub ->
                             showNavBar = !isSub

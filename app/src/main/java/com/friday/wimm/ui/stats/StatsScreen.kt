@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -57,12 +58,13 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.friday.wimm.MyApplication
 import com.friday.wimm.data.database.MerchantTotal
+import com.friday.wimm.util.PeriodStats
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun StatsScreen() {
+fun StatsScreen(isActive: Boolean = true) {
     val application = androidx.compose.ui.platform.LocalContext.current.applicationContext as MyApplication
     val viewModel: StatsViewModel = viewModel(
         factory = StatsViewModel.Factory(
@@ -71,9 +73,11 @@ fun StatsScreen() {
         )
     )
 
-    // 每次页面可见时刷新数据
-    LaunchedEffect(Unit) {
-        viewModel.loadData()
+    // 每次页面可见（切回本 Tab / 首次进入）时刷新数据
+    LaunchedEffect(isActive) {
+        if (isActive) {
+            viewModel.loadData()
+        }
     }
 
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -218,9 +222,64 @@ fun StatsScreen() {
             }
         }
 
+        // 分时段统计（每日/每周/每月/每年）
+        item {
+            val periodStats = remember(filteredTransactions) { PeriodStats.compute(filteredTransactions) }
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+                    .alpha(statsAlpha)
+                    .offset(y = statsOffsetY.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = "分时段统计",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "每日 / 每周 / 每月 / 每年 分时段账单",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    periodStats.forEachIndexed { index, ps ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(ps.label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, modifier = Modifier.width(48.dp))
+                            Column {
+                                Text("支出 ¥${String.format("%.2f", ps.expense)}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                                Text("${ps.expenseCount}笔", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text("收入 ¥${String.format("%.2f", ps.income)}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                Text("${ps.incomeCount}笔", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        if (index < periodStats.size - 1) {
+                            androidx.compose.material3.HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         // 待补录提醒
         item {
-            val pendingTransactions = remember(filteredTransactions) { filteredTransactions.filter { t -> t.amount <= 0 } }
+            val pendingTransactions = remember(filteredTransactions) { filteredTransactions.filter { t -> t.amount <= 0 && t.dataSource == "notification" } }
             if (pendingTransactions.isNotEmpty()) {
                 var showEditDialog by remember { mutableStateOf(false) }
                 var editingTransaction by remember { mutableStateOf<com.friday.wimm.data.model.Transaction?>(null) }

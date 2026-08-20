@@ -33,6 +33,7 @@ import com.friday.wimm.data.model.Card
 import com.friday.wimm.data.model.Transaction
 import com.friday.wimm.data.repository.CardRepository
 import com.friday.wimm.data.repository.CardStatistics
+import com.friday.wimm.util.PeriodStats
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -41,7 +42,7 @@ import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(onAddMissing: () -> Unit = {}) {
+fun HomeScreen(onAddMissing: () -> Unit = {}, isActive: Boolean = true) {
     val context = LocalContext.current
     val application = context.applicationContext as MyApplication
     val cardRepository = remember { CardRepository(application.databaseHelper) }
@@ -51,6 +52,7 @@ fun HomeScreen(onAddMissing: () -> Unit = {}) {
     var selectedCard by remember { mutableStateOf<Card?>(null) }
     var statistics by remember { mutableStateOf<CardStatistics?>(null) }
     var pendingTransactions by remember { mutableStateOf<List<Transaction>>(emptyList()) }
+    var cardTransactions by remember { mutableStateOf<List<Transaction>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var showCardSelector by remember { mutableStateOf(false) }
     var editingTransaction by remember { mutableStateOf<Transaction?>(null) }
@@ -116,20 +118,31 @@ fun HomeScreen(onAddMissing: () -> Unit = {}) {
 
     // 动画状态 - 页面整体渐显
     var pageVisible by remember { mutableStateOf(false) }
+    var initialized by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.withContext(Dispatchers.IO) {
-            cards = cardRepository.getAllCards()
-            val savedCardId = prefs.getLong("selected_card_id", -1L)
-            selectedCard = if (savedCardId > 0) {
-                cards.firstOrNull { it.id == savedCardId }
-            } else {
-                null
-            } ?: cards.firstOrNull { it.isGlobal } ?: cards.firstOrNull()
+    // 加载/刷新数据：首次进入 + 每次切回本页时重新加载（保证导入文件后首页同步）
+    LaunchedEffect(isActive) {
+        if (isActive) {
+            kotlinx.coroutines.withContext(Dispatchers.IO) {
+                cards = cardRepository.getAllCards()
+                val savedCardId = prefs.getLong("selected_card_id", -1L)
+                val card = (if (savedCardId > 0) cards.firstOrNull { it.id == savedCardId } else null)
+                    ?: cards.firstOrNull { it.isGlobal }
+                    ?: cards.firstOrNull()
+                selectedCard = card
+                card?.let {
+                    statistics = cardRepository.getCardStatistics(it)
+                    pendingTransactions = application.transactionRepository.getPendingTransactionsByCard(it)
+                    cardTransactions = cardRepository.getTransactionsByCard(it)
+                }
+            }
+            if (!initialized) {
+                initialized = true
+                isLoading = false
+                kotlinx.coroutines.delay(50)
+                pageVisible = true
+            }
         }
-        isLoading = false
-        kotlinx.coroutines.delay(50)
-        pageVisible = true
     }
 
     // 加载选中卡片的统计数据和待录入交易
@@ -138,6 +151,7 @@ fun HomeScreen(onAddMissing: () -> Unit = {}) {
             kotlinx.coroutines.withContext(Dispatchers.IO) {
                 statistics = cardRepository.getCardStatistics(card)
                 pendingTransactions = application.transactionRepository.getPendingTransactionsByCard(card)
+                cardTransactions = cardRepository.getTransactionsByCard(card)
             }
         }
     }
@@ -220,7 +234,43 @@ fun HomeScreen(onAddMissing: () -> Unit = {}) {
                         }
                     }
 
-                // item 2: 均值
+                // item 2: 局部统计（今日/本周/本月/本年 分时段账单）
+                item {
+                    val periodStats = remember(cardTransactions) { PeriodStats.compute(cardTransactions) }
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text("局部统计", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 2.dp))
+                            Text("每日 / 每周 / 每月 / 每年 分时段账单", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 4.dp))
+                            periodStats.forEachIndexed { index, ps ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 6.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(ps.label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, modifier = Modifier.width(48.dp))
+                                    Column {
+                                        Text("支出 ¥${String.format("%.2f", ps.expense)}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                                        Text("${ps.expenseCount}笔", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        Text("收入 ¥${String.format("%.2f", ps.income)}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                        Text("${ps.incomeCount}笔", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                                if (index < periodStats.size - 1) {
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // item 3: 均值
                 item {
                         Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                             Column(modifier = Modifier.padding(16.dp)) {

@@ -85,7 +85,6 @@ class StatsViewModel(
     fun loadData() {
         viewModelScope.launch {
             val allTransactions = transactionRepository.getAllTransactions()
-                .filter { it.dataSource == "notification" } // 只显示通知监听数据
             _allTransactions.value = allTransactions
             applyTimeFilter()
         }
@@ -160,7 +159,6 @@ class StatsViewModel(
         _isRefreshing.value = true
         viewModelScope.launch {
             val allTransactions = transactionRepository.getAllTransactions()
-                .filter { it.dataSource == "notification" } // 只显示通知监听数据
             _allTransactions.value = allTransactions
             applyTimeFilter()
             _isRefreshing.value = false
@@ -172,7 +170,6 @@ class StatsViewModel(
         viewModelScope.launch {
             transactionRepository.updateAmount(id, amount)
             val allTransactions = transactionRepository.getAllTransactions()
-                .filter { it.dataSource == "notification" }
             _allTransactions.value = allTransactions
             applyTimeFilter()
             _toastMessage.value = "金额已更新"
