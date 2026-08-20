@@ -88,9 +88,9 @@ fun SplashScreen(onFinish: () -> Unit) {
                 .scale(logoScale)
         )
 
-        // by Friday 底部
+        // 底部标语
         Text(
-            text = "by Friday",
+            text = "Why My Money is 0！",
             fontSize = 11.sp,
             fontWeight = FontWeight(300),
             color = TextMuted,
